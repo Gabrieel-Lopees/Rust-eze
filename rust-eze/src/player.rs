@@ -10,19 +10,21 @@ impl Plugin for PlayerPlugin {
 }
 
 #[derive(Component)]
-struct Player;
+pub struct Player;
 
 fn spawn_player(mut commands: Commands) {
+    commands.spawn(Camera2dBundle::default());
+
     commands.spawn((
-            Player,
-            SpriteBundle {
-                transform: Transform::from_xyz(0.0, 0.0, 0.0),
-                sprite: Sprite {
-                    color: Color::RED,
-                    custom_size: Some(Vec2::new(50.0, 50.0)),
-                    ..default()
-                },
+        Player,
+        SpriteBundle {
+            transform: Transform::from_xyz(0.0, 0.0, 0.0),
+            sprite: Sprite {
+                color: Color::RED,
+                custom_size: Some(Vec2::new(50.0, 50.0)),
                 ..default()
             },
-    )),
+            ..default()
+        }
+    ));
 }

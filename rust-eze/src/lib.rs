@@ -5,6 +5,8 @@ use bevy::prelude::*;
 pub mod player;
 pub mod movement;
 pub mod ui;
+pub mod walls;
+pub mod enemies;
 
 pub struct RustEzePlg;
 
@@ -14,7 +16,9 @@ impl Plugin for RustEzePlg {
             .add_plugins(DefaultPlugins)
             .add_plugins(player::PlayerPlugin)
             .add_plugins(movement::MovementPlugin)
-            .add_plugins(ui::UiPlugin);
+            .add_plugins(ui::UiPlugin)
+            .add_plugins(walls::WallsPlugin)
+            .add_plugins(enemies::EnemiesPlugin);
     }
 }
 
