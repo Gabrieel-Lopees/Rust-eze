@@ -1,6 +1,5 @@
 use bevy::prelude::*;
 use bevy::sprite::MaterialMesh2dBundle;
-use crate::config::GameConfig;
 
 pub struct PlayerPlugin;
 
@@ -18,13 +17,14 @@ fn spawn_player(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-     commands.spawn(Camera2dBundle::default());
+    commands.spawn(Camera2dBundle::default());
 
+    let player_size = 25.0;  // Raio do círculo (metade do tamanho anterior)
 
     commands.spawn((
         Player,
         MaterialMesh2dBundle {
-            mesh: meshes.add(Circle::new(GameConfig::PLAYER_SIZE)).into(),
+            mesh: meshes.add(Circle::new(player_size)).into(),
             material: materials.add(ColorMaterial::from(Color::RED)),
             transform: Transform::from_xyz(0.0, 0.0, 0.0),
             ..default()

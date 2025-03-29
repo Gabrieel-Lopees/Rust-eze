@@ -1,6 +1,5 @@
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
-use crate::config::GameConfig;
+use bevy::window::PrimaryWindow;  // Importação necessária
 
 pub struct WallsPlugin;
 
@@ -13,7 +12,8 @@ impl Plugin for WallsPlugin {
 #[derive(Component)]
 pub struct Wall;
 
-fn spawn_walls(mut commands: Commands, window_query: Query<&Window, With<PrimaryWindow>>) {
+fn spawn_walls(mut commands: Commands, window_query: Query<&Window, With<PrimaryWindow>>) {  // Adicione este parâmetro
+    let wall_thickness = 20.0;
     let window = window_query.single();
     let window_width = window.width();
     let window_height = window.height();
@@ -25,7 +25,7 @@ fn spawn_walls(mut commands: Commands, window_query: Query<&Window, With<Primary
             transform: Transform::from_xyz(0.0, window_height / 2.0, 0.0),
             sprite: Sprite {
                 color: Color::GRAY,
-                custom_size: Some(Vec2::new(window_width, GameConfig::WALL_THICKNESS)),
+                custom_size: Some(Vec2::new(window_width, wall_thickness)),
                 ..default()
             },
             ..default()
@@ -39,7 +39,7 @@ fn spawn_walls(mut commands: Commands, window_query: Query<&Window, With<Primary
             transform: Transform::from_xyz(0.0, -window_height / 2.0, 0.0),
             sprite: Sprite {
                 color: Color::GRAY,
-                custom_size: Some(Vec2::new(window_width, GameConfig::WALL_THICKNESS)),
+                custom_size: Some(Vec2::new(window_width, wall_thickness)),
                 ..default()
             },
             ..default()
@@ -53,10 +53,12 @@ fn spawn_walls(mut commands: Commands, window_query: Query<&Window, With<Primary
             transform: Transform::from_xyz(-window_width / 2.0, 0.0, 0.0),
             sprite: Sprite {
                 color: Color::GRAY,
-                custom_size: Some(Vec2::new(GameConfig::WALL_THICKNESS, window_height)),
+                custom_size: Some(Vec2::new(wall_thickness, window_height)),
                 ..default()
             },
-            ..default()
+            ..
+
+default()
         },
     ));
 
@@ -67,7 +69,7 @@ fn spawn_walls(mut commands: Commands, window_query: Query<&Window, With<Primary
             transform: Transform::from_xyz(window_width / 2.0, 0.0, 0.0),
             sprite: Sprite {
                 color: Color::GRAY,
-                custom_size: Some(Vec2::new(GameConfig::WALL_THICKNESS, window_height)),
+                custom_size: Some(Vec2::new(wall_thickness, window_height)),
                 ..default()
             },
             ..default()

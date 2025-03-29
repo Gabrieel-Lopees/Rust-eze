@@ -1,0 +1,165 @@
+use bevy::prelude::*; // basico para rodar
+use bevy::window::PrimaryWindow; // sistema de janelas
+//use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
+use bevy::sprite::MaterialMesh2dBundle;  // Removido Mesh2dHandle
+use bevy::math::Vec3Swizzles;  // Mantido para usar .xy()
+use rand::Rng; // aleatorizador 
+use crate::player::Player;  // Mantido para acessar o jogador
+
+/////////////////////////////////////////////////////////////////////
+
+pub struct EnemiesPlugin;
+
+impl Plugin for EnemiesPlugin {
+    fn build(&self, app: &mut App) {
+        app
+            .add_systems(Startup, spawn_enemies)
+            .add_systems(Update, (move_enemies, check_collision));
+    }
+}
+
+
+#[derive(Component)]
+pub struct Enemy;
+
+fn spawn_enemies(mut commands: Commands, 
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let window = window_query.single();
+    let window_width = window.width();
+    let window_height = window.height();
+    let enemy_size = 20.0;
+    let wall_thickness = 20.0;
+
+    let x_bound = (window_width - wall_thickness - enemy_size) / 2.0;
+    let y_bound = (window_height - wall_thickness - enemy_size) / 2.0;
+
+    let mut rng = rand::thread_rng();
+    for _ in 0..3 {
+        let x = rng.gen_range(-x_bound..x_bound);
+        let y = rng.gen_range(-y_bound..y_bound);
+
+        commands.spawn((
+            Enemy,
+            MaterialMesh2dBundle {
+                mesh: meshes.add(Circle::new(enemy_size)).into(),
+                material: materials.add(ColorMaterial::from(Color::GREEN)),
+                transform: Transform::from_xyz(x, y, 0.0),
+                ..default()
+                },
+        ));
+    }
+}
+
+
+//movimento dos vagabyndos
+
+
+fn move_enemies(
+    mut enemy_query: Query<&mut Transform, (With<Enemy>, Without<Player>)>,
+    player_query: Query<&Transform, (With<Player>, Without<Enemy>)>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    time: Res<Time>,
+) {
+    let speed = 150.0;
+    let enemy_size = 40.0;
+    let wall_thickness = 20.0;
+
+    let window = window_query.single();
+    let window_width = window.width();
+    let window_height = window.height();
+
+    let x_bound = (window_width - wall_thickness - enemy_size) / 2.0;
+    let y_bound = (window_height - wall_thickness - enemy_size) / 2.0;
+
+    // Obter a posisao
+    let player_transform = player_query.single();
+    let player_pos = player_transform.translation.xy();
+
+    for mut transform in enemy_query.iter_mut() {
+        let enemy_pos = transform.translation.xy();
+        let direction = (player_pos - enemy_pos).normalize_or_zero();
+
+        let dx = direction.x * speed * time.delta_seconds();
+        let dy = direction.y * speed * time.delta_seconds();
+
+        let mut new_x = transform.translation.x + dx;  // Adiciona let
+        let mut new_y = transform.translation.y + dy;  // Adiciona let
+
+        // Limita o movimento às paredes
+        new_x = new_x.clamp(-x_bound, x_bound);
+        new_y = new_y.clamp(-y_bound, y_bound);
+
+        transform.translation.x = new_x;
+        transform.translation.y = new_y;
+    }
+}
+
+fn check_collision(
+    mut commands: Commands,
+    player_query: Query<(Entity, &Transform), (With<Player>, Without<Enemy>)>,
+    enemy_query: Query<(Entity, &Transform), (With<Enemy>, Without<Player>)>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let player_size = 25.0;  // Raio do jogador
+    let enemy_size = 20.0;   // Raio do inimigo
+    let collision_distance = player_size + enemy_size;  // Distância mínima para colisão
+
+    let (player_entity, player_transform) = player_query.single();
+    let player_pos = player_transform.translation.xy();
+
+    for (enemy_entity, enemy_transform) in enemy_query.iter() {
+        let enemy_pos = enemy_transform.translation.xy();
+        let distance = (player_pos - enemy_pos).length();
+
+        if distance < collision_distance {
+            // Colisão detectada: despawn do jogador e inimigos
+            commands.entity(player_entity).despawn();
+            for (enemy, _) in enemy_query.iter() {
+                commands.entity(enemy).despawn();
+            }
+
+            // Respawn do jogador
+            commands.spawn((
+                Player,
+                MaterialMesh2dBundle {
+                    mesh: meshes.add(Circle::new(player_size)).into(),
+                    material: materials.add(ColorMaterial::from(Color::RED)),
+                    transform: Transform::from_xyz(0.0, 0.0, 0.0),
+                    ..default()
+                },
+            ));
+
+            // Respawn dos inimigos
+            let window = window_query.single();
+            let window_width = window.width();
+            let window_height = window.height();
+            let wall_thickness = 20.0;
+
+            let x_bound = (window_width - wall_thickness - enemy_size) / 2.0;
+            let y_bound = (window_height - wall_thickness - enemy_size) / 2.0;
+
+            let mut rng = rand::thread_rng();
+            for _ in 0..3 {
+                let x = rng.gen_range(-x_bound..x_bound);
+                let y = rng.gen_range(-y_bound..y_bound);
+
+                commands.spawn((
+                    Enemy,
+                    MaterialMesh2dBundle {
+                        mesh: meshes.add(Circle::new(enemy_size)).into(),
+                        material: materials.add(ColorMaterial::from(Color::GREEN)),
+                        transform: Transform::from_xyz(x, y, 0.0),
+                        ..default()
+                    },
+                ));
+            }
+
+            break;  // Para evitar múltiplas colisões no mesmo frame
+        }
+    }
+}

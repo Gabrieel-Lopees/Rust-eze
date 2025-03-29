@@ -1,8 +1,7 @@
 use bevy::prelude::*;
-use bevy::window::PrimaryWindow;
 use crate::player::Player;
-use crate::enemies::Enemy;
-use crate::config::GameConfig;
+use bevy::window::PrimaryWindow;
+use crate::enemies::Enemy;  // Adiciona para usar Without<Enemy>
 
 pub struct MovementPlugin;
 
@@ -18,29 +17,36 @@ fn move_player(
     time: Res<Time>,
     window_query: Query<&Window, With<PrimaryWindow>>,
 ) {
-    let window = window_query.single();
-    let window_width = window.width();
-    let window_height = window.height();
 
+    let speed = 300.0;
+    let window = window_query.single();
+    let window_width = window.width(); // corresponde a largura da janela
+    let window_height = window.height(); // altura
+    
+    let player_size = 25.0; // tamanho do boneco
+    let wall_thickness = 20.0; // gorssura da parede
+    
     for mut transform in query.iter_mut() {
         let mut new_x = transform.translation.x;
         let mut new_y = transform.translation.y;
 
+        // Rotina if para o movimetno 
         if keyboard.pressed(KeyCode::KeyW) {
-            new_y += GameConfig::PLAYER_SPEED * time.delta_seconds();
+            new_y += speed * time.delta_seconds();
         }
         if keyboard.pressed(KeyCode::KeyS) {
-            new_y -= GameConfig::PLAYER_SPEED * time.delta_seconds();
+            new_y -= speed * time.delta_seconds();
         }
         if keyboard.pressed(KeyCode::KeyD) {
-            new_x += GameConfig::PLAYER_SPEED * time.delta_seconds();
+            new_x += speed * time.delta_seconds();
         }
         if keyboard.pressed(KeyCode::KeyA) {
-            new_x -= GameConfig::PLAYER_SPEED * time.delta_seconds();
+            new_x -= speed * time.delta_seconds();
         }
 
-        let x_bound = (window_width - GameConfig::WALL_THICKNESS - GameConfig::PLAYER_SIZE) / 2.0;
-        let y_bound = (window_height - GameConfig::WALL_THICKNESS - GameConfig::PLAYER_SIZE) / 2.0;
+        let x_bound = (window_width - wall_thickness - player_size) / 2.0;
+        let y_bound = (window_height - wall_thickness - player_size) / 2.0;
+
 
         new_x = new_x.clamp(-x_bound, x_bound);
         new_y = new_y.clamp(-y_bound, y_bound);
@@ -48,3 +54,6 @@ fn move_player(
         transform.translation.y = new_y;
     }
 }
+
+
+

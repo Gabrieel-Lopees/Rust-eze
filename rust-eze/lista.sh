@@ -5,7 +5,7 @@ echo "Oi, aqui está como está meu projeto agora:"
 # Salvar saída em um arquivo temporário
 tmp_file=$(mktemp)
 
-for file in src/lib.rs src/main.rs src/movement.rs src/player.rs src/ui.rs src/walls.rs; do
+for file in src/lib.rs src/main.rs src/movement.rs src/player.rs src/ui.rs src/walls.rs src/enemies.rs src/guns.rs; do
     echo -e "\n### $file" | tee -a "$tmp_file"
     cat "$file" | tee -a "$tmp_file"
     echo -e "\n" | tee -a "$tmp_file"
