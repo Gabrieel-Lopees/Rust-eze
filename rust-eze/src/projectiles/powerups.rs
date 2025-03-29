@@ -49,6 +49,7 @@ pub fn spawn_powerups(
     let enemy_count = enemy_query.iter().filter(|enemy| enemy.room == current_room.id).count();
     let powerup_count = powerup_query.iter().filter(|powerup| powerup.powerup_type != PowerUpType::ExtraLife).count();
 
+    // Só spawna um power-up se não houver inimigos e não houver power-ups na sala
     if enemy_count == 0 && powerup_count == 0 && !powerup_spawn_state.powerup_spawned {
         let mut rng = rand::thread_rng();
         let powerup_type = match rng.gen_range(0..4) {
@@ -114,17 +115,19 @@ pub fn collect_powerups(
     mut materials: ResMut<Assets<ColorMaterial>>,
     mut powerup_spawn_state: ResMut<PowerUpSpawnState>,
 ) {
+    // Verifica se há exatamente um jogador
     let player_pos = {
         let mut player_query = transform_queries.p0();
-        // Tenta obter o jogador, se não encontrar, retorna
         let player_transform = if let Some(player_transform) = player_query.iter_mut().next() {
             player_transform
         } else {
-            return; // Se não houver um jogador, saímos da função
+            eprintln!("Erro: Nenhum jogador encontrado!"); // Log de erro
+            return; // Retorna se não houver um jogador
         };
         player_transform.translation.xy()
     };
 
+    // Itera pelos power-ups e verifica a distância
     let mut powerup_query = transform_queries.p1();
     for (powerup_entity, powerup_transform, powerup) in powerup_query.iter_mut() {
         let powerup_pos = powerup_transform.translation.xy();
@@ -155,17 +158,21 @@ pub fn collect_powerups(
                     ));
                 }
                 PowerUpType::ExtraLife => {
-                    // Tenta obter o componente Lives, se não encontrar, retorna
+                    // Verifica se há exatamente um componente Lives
                     let mut lives = if let Some(lives) = lives_query.iter_mut().next() {
                         lives
                     } else {
-                        return; // Se não houver o componente Lives, saímos da função
+                        eprintln!("Erro: Nenhum componente Lives encontrado!"); // Log de erro
+                        return; // Retorna se não houver o componente Lives
                     };
+
                     if lives.count() < 5 {
                         lives.add_life();
                     }
                 }
             }
+
+            // Remove o power-up da cena
             commands.entity(powerup_entity).despawn();
             powerup_spawn_state.powerup_spawned = false;
         }
@@ -232,3 +239,5 @@ pub fn update_rotating_circle(
         }
     }
 }
+
+

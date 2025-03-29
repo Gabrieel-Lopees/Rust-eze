@@ -164,7 +164,7 @@ fn check_room_transition(
     let x_bound = (window_width - GameConfig::WALL_THICKNESS - GameConfig::PLAYER_SIZE) / 2.0;
     let y_bound = (window_height - GameConfig::WALL_THICKNESS - GameConfig::PLAYER_SIZE) / 2.0;
 
-    let mut room = match room_graph.get_room(current_room.id) {
+    let room = match room_graph.get_room(current_room.id) {
         Some(room) => room,
         None => {
             error!("Sala atual não encontrada no grafo: {:?}", current_room.id);

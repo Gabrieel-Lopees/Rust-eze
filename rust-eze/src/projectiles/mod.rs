@@ -15,6 +15,7 @@ impl Plugin for ProjectilesPlugin {
     fn build(&self, app: &mut App) {
         app
             .init_resource::<powerups::PlayerPowerUpState>()
+            .init_resource::<powerups::PowerUpSpawnState>() // Adiciona a inicialização do PowerUpSpawnState
             .add_systems(Update, (
                 spawn_projectiles,
                 move_projectiles,
