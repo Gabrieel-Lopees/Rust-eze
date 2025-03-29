@@ -1,33 +1,5 @@
 use bevy::prelude::*;
 
-#[derive(Component)]
-pub struct Lives {
-    count: u32,
-}
-
-impl Lives {
-    pub fn new() -> Self {
-        Lives { count: 3 }
-    }
-
-    pub fn lose_life(&mut self) -> bool {
-        if self.count > 0 {
-            self.count -= 1;
-            self.count == 0  // Retorna true se as vidas acabaram
-        } else {
-            true
-        }
-    }
-
-    pub fn reset(&mut self) {
-        self.count = 3;
-    }
-
-    pub fn count(&self) -> u32 {
-        self.count
-    }
-}
-
 pub struct LivesPlugin;
 
 impl Plugin for LivesPlugin {
@@ -37,6 +9,36 @@ impl Plugin for LivesPlugin {
     }
 }
 
-fn setup_lives(mut commands: Commands) {
-    commands.spawn(Lives::new());
+#[derive(Component)]
+pub struct Lives(u32);
+
+impl Lives {
+    pub fn new(count: u32) -> Self {
+        Lives(count)
+    }
+
+    pub fn lose_life(&mut self) -> bool {
+        if self.0 > 0 {
+            self.0 -= 1;
+        }
+        self.0 == 0
+    }
+
+    pub fn add_life(&mut self) {
+        self.0 += 1;
+    }
+
+    pub fn count(&self) -> u32 {
+        self.0
+    }
+
+    pub fn reset(&mut self) {
+        self.0 = 3;
+    }
+}
+
+fn setup_lives(
+    mut commands: Commands,
+) {
+    commands.spawn(Lives::new(3));
 }

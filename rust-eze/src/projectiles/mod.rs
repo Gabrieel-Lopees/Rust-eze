@@ -1,6 +1,6 @@
 use bevy::prelude::*;
-// use bevy::sprite::MaterialMesh2dBundle;
 use bevy::window::PrimaryWindow;
+use crate::enemies::Enemy;
 
 mod powerups;
 mod standard_projectile;
@@ -123,33 +123,40 @@ fn move_projectiles(
 
 fn check_projectile_collision(
     mut commands: Commands,
-    projectile_query: Query<(Entity, &Transform, &Projectile), With<Projectile>>,
-    enemy_query: Query<(Entity, &Transform), (With<crate::enemies::Enemy>, Without<crate::player::Player>)>,
+    mut transform_queries: ParamSet<(
+        Query<(Entity, &Transform, &Projectile), Without<Enemy>>,
+        Query<(Entity, &Transform), (With<Enemy>, Without<Projectile>)>,
+    )>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
 ) {
-    for (projectile_entity, projectile_transform, projectile) in projectile_query.iter() {
+    // Acessa a query dos inimigos e coleta os dados
+    let enemies: Vec<(Entity, Vec2)> = {
+        let enemy_query = transform_queries.p1();
+        enemy_query.iter().map(|(entity, transform)| (entity, transform.translation.xy())).collect()
+    };
+
+    // Acessa a query dos projéteis
+    let mut projectile_query = transform_queries.p0();
+    for (projectile_entity, projectile_transform, projectile) in projectile_query.iter_mut() {
         let projectile_pos = projectile_transform.translation.xy();
 
-        for (enemy_entity, enemy_transform) in enemy_query.iter() {
-            let enemy_pos = enemy_transform.translation.xy();
-            let distance = (projectile_pos - enemy_pos).length();
+        for (enemy_entity, enemy_pos) in enemies.iter() {
+            let distance = (projectile_pos - *enemy_pos).length();
 
             if distance < crate::config::GameConfig::ENEMY_SIZE + PROJECTILE_SIZE {
                 commands.entity(projectile_entity).despawn();
                 if projectile.explosive {
-                    // Dano em área para projéteis explosivos
-                    for (other_enemy_entity, other_enemy_transform) in enemy_query.iter() {
-                        let other_enemy_pos = other_enemy_transform.translation.xy();
-                        let area_distance = (projectile_pos - other_enemy_pos).length();
+                    for (other_enemy_entity, other_enemy_pos) in enemies.iter() {
+                        let area_distance = (projectile_pos - *other_enemy_pos).length();
                         if area_distance < 50.0 {
-                            commands.entity(other_enemy_entity).despawn();
+                            commands.entity(*other_enemy_entity).despawn();
                         }
                     }
                 } else {
-                    commands.entity(enemy_entity).despawn();
+                    commands.entity(*enemy_entity).despawn();
                 }
-                powerups::try_spawn_powerup(&mut commands, enemy_pos, &mut meshes, &mut materials);
+                powerups::try_spawn_powerup(&mut commands, *enemy_pos, &mut meshes, &mut materials);
                 break;
             }
         }

@@ -10,6 +10,11 @@ pub struct PowerUp {
     pub powerup_type: PowerUpType,
 }
 
+#[derive(Resource, Default)]
+pub struct PowerUpSpawnState {
+    pub powerup_spawned: bool,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum PowerUpType {
     FasterProjectile,
@@ -39,11 +44,12 @@ pub fn spawn_powerups(
     current_room: Res<crate::rooms::CurrentRoom>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut powerup_spawn_state: ResMut<PowerUpSpawnState>,
 ) {
     let enemy_count = enemy_query.iter().filter(|enemy| enemy.room == current_room.id).count();
     let powerup_count = powerup_query.iter().filter(|powerup| powerup.powerup_type != PowerUpType::ExtraLife).count();
 
-    if enemy_count == 0 && powerup_count == 0 {
+    if enemy_count == 0 && powerup_count == 0 && !powerup_spawn_state.powerup_spawned {
         let mut rng = rand::thread_rng();
         let powerup_type = match rng.gen_range(0..4) {
             0 => PowerUpType::FasterProjectile,
@@ -55,8 +61,8 @@ pub fn spawn_powerups(
 
         let color = match powerup_type {
             PowerUpType::FasterProjectile => Color::BLUE,
-            PowerUpType::ExplosiveProjectile => Color::ORANGE,
-            PowerUpType::RotatingCircle => Color::PURPLE,
+            PowerUpType::ExplosiveProjectile => Color::PURPLE,
+            PowerUpType::RotatingCircle => Color::ORANGE,
             PowerUpType::ExtraLife => Color::RED,
         };
 
@@ -69,6 +75,7 @@ pub fn spawn_powerups(
                 ..default()
             },
         ));
+        powerup_spawn_state.powerup_spawned = true;
     }
 }
 
@@ -97,17 +104,29 @@ pub fn try_spawn_powerup(
 
 pub fn collect_powerups(
     mut commands: Commands,
-    mut player_query: Query<&mut Transform, With<Player>>,
-    powerup_query: Query<(Entity, &Transform, &PowerUp)>,
+    mut transform_queries: ParamSet<(
+        Query<&mut Transform, With<Player>>,
+        Query<(Entity, &Transform, &PowerUp), Without<Player>>,
+    )>,
     mut lives_query: Query<&mut Lives>,
     mut player_powerup_state: ResMut<PlayerPowerUpState>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<ColorMaterial>>,
+    mut powerup_spawn_state: ResMut<PowerUpSpawnState>,
 ) {
-    let player_transform = player_query.single_mut();
-    let player_pos = player_transform.translation.xy();
+    let player_pos = {
+        let mut player_query = transform_queries.p0();
+        // Tenta obter o jogador, se não encontrar, retorna
+        let player_transform = if let Some(player_transform) = player_query.iter_mut().next() {
+            player_transform
+        } else {
+            return; // Se não houver um jogador, saímos da função
+        };
+        player_transform.translation.xy()
+    };
 
-    for (powerup_entity, powerup_transform, powerup) in powerup_query.iter() {
+    let mut powerup_query = transform_queries.p1();
+    for (powerup_entity, powerup_transform, powerup) in powerup_query.iter_mut() {
         let powerup_pos = powerup_transform.translation.xy();
         let distance = (player_pos - powerup_pos).length();
 
@@ -136,16 +155,23 @@ pub fn collect_powerups(
                     ));
                 }
                 PowerUpType::ExtraLife => {
-                    let mut lives = lives_query.single_mut();
+                    // Tenta obter o componente Lives, se não encontrar, retorna
+                    let mut lives = if let Some(lives) = lives_query.iter_mut().next() {
+                        lives
+                    } else {
+                        return; // Se não houver o componente Lives, saímos da função
+                    };
                     if lives.count() < 5 {
                         lives.add_life();
                     }
                 }
             }
             commands.entity(powerup_entity).despawn();
+            powerup_spawn_state.powerup_spawned = false;
         }
     }
 }
+
 
 pub fn update_powerup_timers(
     mut player_powerup_state: ResMut<PlayerPowerUpState>,
@@ -168,25 +194,35 @@ pub fn update_powerup_timers(
 
 pub fn update_rotating_circle(
     mut commands: Commands,
-    mut circle_query: Query<(Entity, &mut Transform, &mut RotatingCircle)>,
-    player_query: Query<&Transform, With<Player>>,
-    enemy_query: Query<(Entity, &Transform), (With<Enemy>, Without<Player>)>,
+    mut transform_queries: ParamSet<(
+        Query<(Entity, &mut Transform, &mut RotatingCircle)>,
+        Query<&Transform, With<Player>>,
+        Query<(Entity, &Transform), (With<Enemy>, Without<Player>)>,
+    )>,
     time: Res<Time>,
 ) {
-    let player_transform = player_query.single();
-    let player_pos = player_transform.translation.xy();
+    let player_pos = {
+        let player_query = transform_queries.p1();
+        let player_transform = player_query.get_single().expect("Falha ao obter o transform do jogador!");
+        player_transform.translation.xy()
+    };
 
+    let enemies: Vec<(Entity, Vec2)> = {
+        let enemy_query = transform_queries.p2();
+        enemy_query.iter().map(|(entity, transform)| (entity, transform.translation.xy())).collect()
+    };
+
+    let mut circle_query = transform_queries.p0();
     for (entity, mut transform, mut circle) in circle_query.iter_mut() {
         circle.angle += circle.speed * time.delta_seconds();
         let x = player_pos.x + circle.radius * circle.angle.cos();
         let y = player_pos.y + circle.radius * circle.angle.sin();
         transform.translation = Vec3::new(x, y, 0.0);
 
-        for (enemy_entity, enemy_transform) in enemy_query.iter() {
-            let enemy_pos = enemy_transform.translation.xy();
-            let distance = (Vec2::new(x, y) - enemy_pos).length();
+        for (enemy_entity, enemy_pos) in enemies.iter() {
+            let distance = (Vec2::new(x, y) - *enemy_pos).length();
             if distance < 10.0 {
-                commands.entity(enemy_entity).despawn();
+                commands.entity(*enemy_entity).despawn();
             }
         }
 
