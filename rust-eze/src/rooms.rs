@@ -3,8 +3,10 @@ use bevy::window::PrimaryWindow;
 use crate::player::Player;
 use crate::config::GameConfig;
 use crate::enemies::Enemy;
-use rand::Rng;
+// use rand::Rng;
 use std::collections::HashMap;
+use rand::prelude::SliceRandom;
+
 
 pub struct RoomsPlugin;
 
@@ -86,7 +88,7 @@ impl RoomGraph {
         };
 
         // Conecta a nova sala à sala pai
-        let mut parent_room = self.rooms.get_mut(&parent_id).unwrap();
+        let parent_room = self.rooms.get_mut(&parent_id).unwrap();
         match direction {
             "north" => {
                 parent_room.north = Some(new_id);
