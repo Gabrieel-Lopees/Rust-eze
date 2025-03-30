@@ -192,7 +192,7 @@ pub fn collect_powerups(
 
             // Remove o power-up da cena
             commands.entity(powerup_entity).despawn();
-            powerup_spawn_state.powerup_spawned = true;
+            powerup_spawn_state.powerup_spawned = false;
         }
     }
 }
