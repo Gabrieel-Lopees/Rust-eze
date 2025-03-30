@@ -2,7 +2,7 @@ use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
 use crate::enemies::Enemy;
 
-mod powerups;
+pub mod powerups;
 mod standard_projectile;
 mod fire_projectile;
 mod ice_projectile;
@@ -15,7 +15,7 @@ impl Plugin for ProjectilesPlugin {
     fn build(&self, app: &mut App) {
         app
             .init_resource::<powerups::PlayerPowerUpState>()
-            .init_resource::<powerups::PowerUpSpawnState>() // Adiciona a inicialização do PowerUpSpawnState
+            .init_resource::<powerups::PowerUpSpawnState>()
             .add_systems(Update, (
                 spawn_projectiles,
                 move_projectiles,
@@ -24,9 +24,12 @@ impl Plugin for ProjectilesPlugin {
                 powerups::collect_powerups,
                 powerups::update_powerup_timers,
                 powerups::update_rotating_circle,
+                powerups::reset_powerup_spawn_state, // Adiciona o novo sistema
             ));
     }
 }
+
+// ... (o resto do arquivo permanece o mesmo)
 
 #[derive(Component)]
 pub struct Projectile {

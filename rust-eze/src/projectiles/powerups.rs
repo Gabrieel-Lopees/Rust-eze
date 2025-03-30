@@ -13,6 +13,7 @@ pub struct PowerUp {
 #[derive(Resource, Default)]
 pub struct PowerUpSpawnState {
     pub powerup_spawned: bool,
+    pub current_room_id: Option<crate::rooms::RoomId>, // Rastreia a sala atual
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -49,7 +50,10 @@ pub fn spawn_powerups(
     let enemy_count = enemy_query.iter().filter(|enemy| enemy.room == current_room.id).count();
     let powerup_count = powerup_query.iter().filter(|powerup| powerup.powerup_type != PowerUpType::ExtraLife).count();
 
-    // Só spawna um power-up se não houver inimigos e não houver power-ups na sala
+    // Só spawna um power-up se:
+    // 1. Não houver inimigos na sala
+    // 2. Não houver power-ups na sala
+    // 3. Um power-up ainda não foi spawnado nesta sala
     if enemy_count == 0 && powerup_count == 0 && !powerup_spawn_state.powerup_spawned {
         let mut rng = rand::thread_rng();
         let powerup_type = match rng.gen_range(0..4) {
@@ -77,8 +81,22 @@ pub fn spawn_powerups(
             },
         ));
         powerup_spawn_state.powerup_spawned = true;
+        powerup_spawn_state.current_room_id = Some(current_room.id); // Marca a sala atual
     }
 }
+
+pub fn reset_powerup_spawn_state(
+    current_room: Res<crate::rooms::CurrentRoom>,
+    mut powerup_spawn_state: ResMut<PowerUpSpawnState>,
+) {
+    // Se a sala atual mudou, reseta o estado de spawn de power-up
+    if powerup_spawn_state.current_room_id != Some(current_room.id) {
+        powerup_spawn_state.powerup_spawned = false;
+        powerup_spawn_state.current_room_id = Some(current_room.id);
+    }
+}
+
+// ... (o resto do arquivo permanece o mesmo, incluindo try_spawn_powerup, collect_powerups, etc.)
 
 pub fn try_spawn_powerup(
     commands: &mut Commands,

@@ -1,5 +1,7 @@
 use bevy::prelude::*;
 use bevy::window::PrimaryWindow;
+use bevy::sprite::MaterialMesh2dBundle; // Importa MaterialMesh2dBundle
+use bevy::math::primitives::Rectangle; // Importa Rectangle do módulo correto
 use crate::player::Player;
 use crate::config::GameConfig;
 use crate::enemies::Enemy;
@@ -13,21 +15,22 @@ impl Plugin for RoomsPlugin {
             .init_resource::<RoomGraph>()
             .init_resource::<CurrentRoom>()
             .add_systems(Update, check_room_transition.before(generate_new_rooms))
-            .add_systems(Update, generate_new_rooms);
+            .add_systems(Update, generate_new_rooms)
+            .add_systems(Update, spawn_doors);
     }
 }
 
 #[derive(Resource)]
 pub struct CurrentRoom {
     pub id: RoomId,
-    pub entered_from: Option<&'static str>, // "north", "south", "east", "west", ou None
+    pub entered_from: Option<&'static str>,
 }
 
 impl Default for CurrentRoom {
     fn default() -> Self {
         CurrentRoom {
             id: RoomId::Central,
-            entered_from: None, // A sala inicial não tem direção de entrada
+            entered_from: None,
         }
     }
 }
@@ -44,13 +47,19 @@ impl Default for RoomId {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Room {
     pub id: RoomId,
     pub north: Option<RoomId>,
     pub south: Option<RoomId>,
     pub east: Option<RoomId>,
     pub west: Option<RoomId>,
+}
+
+#[derive(Component)]
+pub struct Door {
+    pub direction: &'static str,
+    pub room_id: RoomId,
 }
 
 #[derive(Resource, Default)]
@@ -74,12 +83,17 @@ impl RoomGraph {
             west: None,
         };
         graph.rooms.insert(RoomId::Central, central_room);
+        info!("RoomGraph inicializado com sala Central: {:?}", graph.rooms.get(&RoomId::Central));
 
         graph
     }
 
     pub fn get_room(&self, id: RoomId) -> Option<&Room> {
-        self.rooms.get(&id)
+        let room = self.rooms.get(&id);
+        if room.is_none() {
+            error!("Sala não encontrada no grafo: {:?}", id);
+        }
+        room
     }
 
     pub fn add_room(&mut self, parent_id: RoomId, direction: &str) -> RoomId {
@@ -176,16 +190,16 @@ fn check_room_transition(
     let mut entered_from = None;
     if player_pos.y > y_bound && room.north.is_some() {
         new_room = room.north;
-        entered_from = Some("south"); // Veio do sul da nova sala
+        entered_from = Some("south");
     } else if player_pos.y < -y_bound && room.south.is_some() {
         new_room = room.south;
-        entered_from = Some("north"); // Veio do norte da nova sala
+        entered_from = Some("north");
     } else if player_pos.x > x_bound && room.east.is_some() {
         new_room = room.east;
-        entered_from = Some("west"); // Veio do oeste da nova sala
+        entered_from = Some("west");
     } else if player_pos.x < -x_bound && room.west.is_some() {
         new_room = room.west;
-        entered_from = Some("east"); // Veio do leste da nova sala
+        entered_from = Some("east");
     }
 
     if let Some(new_room_id) = new_room {
@@ -202,51 +216,154 @@ fn generate_new_rooms(
     mut room_graph: ResMut<RoomGraph>,
     current_room: Res<CurrentRoom>,
     enemy_query: Query<&Enemy>,
+    powerup_query: Query<&crate::projectiles::powerups::PowerUp>,
 ) {
     let enemy_count = enemy_query.iter().filter(|enemy| enemy.room == current_room.id).count();
     if enemy_count > 0 {
         return;
     }
 
-    // Primeiro, obtemos uma cópia das conexões atuais da sala
-    let room_connections = if let Some(room) = room_graph.get_room(current_room.id) {
-        (room.north, room.south, room.east, room.west)
-    } else {
-        error!("Sala atual não encontrada no grafo: {:?}", current_room.id);
+    let powerup_count = powerup_query.iter().filter(|powerup| powerup.powerup_type != crate::projectiles::powerups::PowerUpType::ExtraLife).count();
+    if powerup_count > 0 {
         return;
+    }
+
+    let available_directions: Vec<&str> = {
+        let room = match room_graph.get_room(current_room.id) {
+            Some(room) => room,
+            None => {
+                error!("Sala atual não encontrada no grafo: {:?}", current_room.id);
+                return;
+            }
+        };
+
+        if room.north.is_some() && room.south.is_some() && room.east.is_some() && room.west.is_some() {
+            return;
+        }
+
+        let directions = if current_room.id == RoomId::Central {
+            vec!["north", "south", "east", "west"]
+        } else {
+            let mut dirs = vec!["north", "south", "east", "west"];
+            if let Some(entered_from) = current_room.entered_from {
+                dirs.retain(|&dir| dir != entered_from);
+            }
+            dirs
+        };
+
+        directions.into_iter().filter(|&dir| {
+            match dir {
+                "north" => room.north.is_none(),
+                "south" => room.south.is_none(),
+                "east" => room.east.is_none(),
+                "west" => room.west.is_none(),
+                _ => false,
+            }
+        }).collect()
     };
 
-    // Lista de direções disponíveis para criar novas salas
-    let mut available_directions = vec!["north", "south", "east", "west"];
+    for direction in available_directions {
+        room_graph.add_room(current_room.id, direction);
+    }
+}
 
-    if let Some(entered_from) = current_room.entered_from {
-        available_directions.retain(|&dir| dir != entered_from);
+fn spawn_doors(
+    mut commands: Commands,
+    current_room: Res<CurrentRoom>,
+    room_graph: Res<RoomGraph>,
+    door_query: Query<(Entity, &Door)>,
+    enemy_query: Query<&Enemy>,
+    powerup_query: Query<&crate::projectiles::powerups::PowerUp>,
+    window_query: Query<&Window, With<PrimaryWindow>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+) {
+    let enemy_count = enemy_query.iter().filter(|enemy| enemy.room == current_room.id).count();
+    if enemy_count > 0 {
+        return;
     }
 
-    // Criamos uma lista de novas salas para adicionar
-    let mut new_rooms = Vec::new();
+    let powerup_count = powerup_query.iter().filter(|powerup| powerup.powerup_type != crate::projectiles::powerups::PowerUpType::ExtraLife).count();
+    if powerup_count > 0 {
+        return;
+    }
 
-    for &direction in &available_directions {
-        match direction {
-            "north" if room_connections.0.is_none() => new_rooms.push("north"),
-            "south" if room_connections.1.is_none() => new_rooms.push("south"),
-            "east" if room_connections.2.is_none() => new_rooms.push("east"),
-            "west" if room_connections.3.is_none() => new_rooms.push("west"),
-            _ => {}
+    let room = match room_graph.get_room(current_room.id) {
+        Some(room) => room,
+        None => {
+            error!("Sala atual não encontrada no grafo: {:?}", current_room.id);
+            return;
+        }
+    };
+
+    let window = window_query.single();
+    let window_width = window.width();
+    let window_height = window.height();
+    let x_bound = (window_width - GameConfig::WALL_THICKNESS) / 2.0;
+    let y_bound = (window_height - GameConfig::WALL_THICKNESS) / 2.0;
+
+    // Remove portas existentes na sala atual
+    for (entity, door) in door_query.iter() {
+        if door.room_id == current_room.id {
+            commands.entity(entity).despawn();
         }
     }
 
-    // Agora, criamos as novas salas
-    for &direction in &new_rooms {
-        let new_id = room_graph.add_room(current_room.id, direction);
-        if let Some(room) = room_graph.rooms.get_mut(&current_room.id) {
-            match direction {
-                "north" => room.north = Some(new_id),
-                "south" => room.south = Some(new_id),
-                "east" => room.east = Some(new_id),
-                "west" => room.west = Some(new_id),
-                _ => {}
-            }
-        }
+    // Spawna portas visíveis para as direções disponíveis
+    if room.north.is_some() {
+        commands.spawn((
+            Door {
+                direction: "north",
+                room_id: current_room.id,
+            },
+            MaterialMesh2dBundle {
+                mesh: meshes.add(Rectangle::new(50.0, 20.0)).into(),
+                material: materials.add(ColorMaterial::from(Color::GREEN)),
+                transform: Transform::from_xyz(0.0, y_bound, 0.0),
+                ..default()
+            },
+        ));
+    }
+    if room.south.is_some() {
+        commands.spawn((
+            Door {
+                direction: "south",
+                room_id: current_room.id,
+            },
+            MaterialMesh2dBundle {
+                mesh: meshes.add(Rectangle::new(50.0, 20.0)).into(),
+                material: materials.add(ColorMaterial::from(Color::GREEN)),
+                transform: Transform::from_xyz(0.0, -y_bound, 0.0),
+                ..default()
+            },
+        ));
+    }
+    if room.east.is_some() {
+        commands.spawn((
+            Door {
+                direction: "east",
+                room_id: current_room.id,
+            },
+            MaterialMesh2dBundle {
+                mesh: meshes.add(Rectangle::new(20.0, 50.0)).into(),
+                material: materials.add(ColorMaterial::from(Color::GREEN)),
+                transform: Transform::from_xyz(x_bound, 0.0, 0.0),
+                ..default()
+            },
+        ));
+    }
+    if room.west.is_some() {
+        commands.spawn((
+            Door {
+                direction: "west",
+                room_id: current_room.id,
+            },
+            MaterialMesh2dBundle {
+                mesh: meshes.add(Rectangle::new(20.0, 50.0)).into(),
+                material: materials.add(ColorMaterial::from(Color::GREEN)),
+                transform: Transform::from_xyz(-x_bound, 0.0, 0.0),
+                ..default()
+            },
+        ));
     }
 }
